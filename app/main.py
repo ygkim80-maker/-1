@@ -2,9 +2,11 @@ import base64
 import binascii
 import os
 from datetime import datetime
+from io import BytesIO
 
+import qrcode
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
@@ -30,62 +32,44 @@ def root():
     return RedirectResponse(url="/dashboard")
 
 
-def _driver_status(db: Session, driver: models.Driver):
-    link = (
-        db.query(models.SigningLink)
-        .filter(models.SigningLink.driver_id == driver.id)
-        .order_by(models.SigningLink.id.desc())
-        .first()
-    )
-    signed = bool(link and link.signature)
-    return link, signed
+def _active_document(db: Session) -> models.EducationDocument:
+    document = db.query(models.EducationDocument).order_by(models.EducationDocument.id.desc()).first()
+    if not document:
+        raise HTTPException(status_code=500, detail="등록된 교육 문서가 없습니다")
+    return document
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request, db: Session = Depends(get_db)):
     sites = db.query(models.Site).order_by(models.Site.id).all()
     site_rows = []
-    total_drivers = 0
+    total_headcount = 0
     total_signed = 0
 
     for site in sites:
-        drivers = site.drivers
-        signed_count = 0
-        driver_rows = []
-        for driver in drivers:
-            link, signed = _driver_status(db, driver)
-            if signed:
-                signed_count += 1
-            driver_rows.append(
-                {
-                    "driver": driver,
-                    "signed": signed,
-                    "signed_at": link.signature.signed_at if signed else None,
-                    "token": link.token if link else None,
-                    "link_id": link.id if link else None,
-                }
-            )
-        total_drivers += len(drivers)
+        signatures = sorted(site.signatures, key=lambda s: s.signed_at, reverse=True)
+        signed_count = len(signatures)
+        total_headcount += site.headcount
         total_signed += signed_count
-        rate = round(signed_count / len(drivers) * 100, 1) if drivers else 0.0
+        rate = round(signed_count / site.headcount * 100, 1) if site.headcount else 0.0
         site_rows.append(
             {
                 "site": site,
-                "total": len(drivers),
+                "headcount": site.headcount,
                 "signed": signed_count,
                 "rate": rate,
-                "drivers": driver_rows,
+                "signatures": signatures,
             }
         )
 
-    overall_rate = round(total_signed / total_drivers * 100, 1) if total_drivers else 0.0
+    overall_rate = round(total_signed / total_headcount * 100, 1) if total_headcount else 0.0
 
     return templates.TemplateResponse(
         "dashboard.html",
         {
             "request": request,
             "site_rows": site_rows,
-            "total_drivers": total_drivers,
+            "total_headcount": total_headcount,
             "total_signed": total_signed,
             "overall_rate": overall_rate,
         },
@@ -94,56 +78,57 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/api/dashboard/summary")
 def dashboard_summary(db: Session = Depends(get_db)):
-    total_drivers = db.query(func.count(models.Driver.id)).scalar() or 0
+    total_headcount = db.query(func.coalesce(func.sum(models.Site.headcount), 0)).scalar() or 0
     total_signed = db.query(func.count(models.Signature.id)).scalar() or 0
     return {
-        "total_drivers": total_drivers,
+        "total_headcount": total_headcount,
         "total_signed": total_signed,
-        "rate": round(total_signed / total_drivers * 100, 1) if total_drivers else 0.0,
+        "rate": round(total_signed / total_headcount * 100, 1) if total_headcount else 0.0,
     }
 
 
-@app.post("/api/remind/{driver_id}")
-def remind(driver_id: int, db: Session = Depends(get_db)):
-    driver = db.get(models.Driver, driver_id)
-    if not driver:
-        raise HTTPException(status_code=404, detail="배송원을 찾을 수 없습니다")
-    # TODO: 카카오 알림톡 API 연동. 본 MVP는 발송 없이 큐잉만 흉내내는 stub입니다.
-    return {"status": "queued", "channel": "kakao_alimtalk(stub)", "driver": driver.name}
-
-
-@app.get("/sign/{token}", response_class=HTMLResponse)
-def sign_page(token: str, request: Request, db: Session = Depends(get_db)):
-    link = db.query(models.SigningLink).filter(models.SigningLink.token == token).first()
-    if not link:
-        raise HTTPException(status_code=404, detail="유효하지 않은 링크입니다")
-    if link.signature:
-        return templates.TemplateResponse("signed.html", {"request": request, "link": link})
+@app.get("/sign", response_class=HTMLResponse)
+def sign_page(request: Request, db: Session = Depends(get_db)):
+    document = _active_document(db)
+    sites = db.query(models.Site).order_by(models.Site.id).all()
     return templates.TemplateResponse(
-        "sign.html",
-        {
-            "request": request,
-            "token": token,
-            "document": link.document,
-            "suggested_name": link.driver.name,
-        },
+        "sign.html", {"request": request, "document": document, "sites": sites}
     )
 
 
-@app.post("/sign/{token}/submit")
+@app.get("/qr.png", include_in_schema=False)
+def master_qr(request: Request):
+    sign_url = str(request.base_url).rstrip("/") + "/sign"
+    img = qrcode.make(sign_url, border=2)
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="image/png")
+
+
+@app.get("/qr", response_class=HTMLResponse)
+def qr_page(request: Request, db: Session = Depends(get_db)):
+    document = _active_document(db)
+    sign_url = str(request.base_url).rstrip("/") + "/sign"
+    return templates.TemplateResponse(
+        "qr_page.html",
+        {"request": request, "sign_url": sign_url, "document_title": document.title},
+    )
+
+
+@app.post("/sign/submit")
 def submit_signature(
-    token: str,
     request: Request,
     name: str = Form(...),
+    site_id: int = Form(...),
     agree: str = Form(...),
     signature_image: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    link = db.query(models.SigningLink).filter(models.SigningLink.token == token).first()
-    if not link:
-        raise HTTPException(status_code=404, detail="유효하지 않은 링크입니다")
-    if link.signature:
-        raise HTTPException(status_code=409, detail="이미 서명이 완료되었습니다")
+    document = _active_document(db)
+    site = db.get(models.Site, site_id)
+    if not site:
+        raise HTTPException(status_code=400, detail="소속 지사를 선택해 주세요")
     name = name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="이름을 입력해 주세요")
@@ -159,39 +144,42 @@ def submit_signature(
     if len(image_bytes) < 100:
         raise HTTPException(status_code=400, detail="서명이 비어 있습니다")
 
-    image_path = os.path.join(SIGNATURES_DIR, f"{link.id}.png")
-    with open(image_path, "wb") as f:
-        f.write(image_bytes)
-
     signed_at = datetime.utcnow()
     content_hash = sha256_hex(
-        link.document.content.encode("utf-8"),
+        document.content.encode("utf-8"),
         image_bytes,
         name.encode("utf-8"),
+        site.name.encode("utf-8"),
         signed_at.isoformat().encode("utf-8"),
     )
 
     signature = models.Signature(
-        signing_link_id=link.id,
+        document_id=document.id,
+        site_id=site.id,
         entered_name=name,
         signed_at=signed_at,
         ip_address=request.client.host if request.client else "unknown",
         user_agent=request.headers.get("user-agent", "")[:255],
-        verify_method="self_reported_name",
-        signature_image_path=f"/static/signatures/{link.id}.png",
         content_hash=content_hash,
     )
     db.add(signature)
+    db.flush()
+
+    image_path = os.path.join(SIGNATURES_DIR, f"{signature.id}.png")
+    with open(image_path, "wb") as f:
+        f.write(image_bytes)
+    signature.signature_image_path = f"/static/signatures/{signature.id}.png"
+
     db.commit()
 
-    return {"ok": True, "redirect": f"/certificate/{link.id}"}
+    return {"ok": True, "redirect": f"/certificate/{signature.id}"}
 
 
-@app.get("/certificate/{link_id}", response_class=HTMLResponse)
-def certificate(link_id: int, request: Request, db: Session = Depends(get_db)):
-    link = db.get(models.SigningLink, link_id)
-    if not link or not link.signature:
+@app.get("/certificate/{signature_id}", response_class=HTMLResponse)
+def certificate(signature_id: int, request: Request, db: Session = Depends(get_db)):
+    signature = db.get(models.Signature, signature_id)
+    if not signature:
         raise HTTPException(status_code=404, detail="서명 기록을 찾을 수 없습니다")
     return templates.TemplateResponse(
-        "certificate.html", {"request": request, "link": link, "signature": link.signature}
+        "certificate.html", {"request": request, "signature": signature}
     )

@@ -4,9 +4,9 @@
 <div class="certificate">
   <h1>전자서명 증빙서</h1>
   <table class="cert-table">
-    <tr><th>문서명</th><td>{{ link.document.title }} (v{{ link.document.version }})</td></tr>
-    <tr><th>서명자(입력값)</th><td>{{ signature.entered_name or link.driver.name }}</td></tr>
-    <tr><th>소속</th><td>{{ link.driver.site.name }}</td></tr>
+    <tr><th>문서명</th><td>{{ signature.document.title }} (v{{ signature.document.version }})</td></tr>
+    <tr><th>서명자(입력값)</th><td>{{ signature.entered_name }}</td></tr>
+    <tr><th>소속</th><td>{{ signature.site.name }}</td></tr>
     <tr><th>서명 시각</th><td>{{ signature.signed_at.strftime('%Y-%m-%d %H:%M:%S') }} (UTC)</td></tr>
     <tr><th>본인확인 방식</th><td>본인 직접 입력(별도 인증 절차 없음)</td></tr>
     <tr><th>IP 주소</th><td>{{ signature.ip_address }}</td></tr>

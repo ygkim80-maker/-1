@@ -2,14 +2,23 @@
 {% block title %}전자서명 - {{ document.title }}{% endblock %}
 {% block content %}
 <h1>배송 안전교육 서명</h1>
-<p class="notice">아래 교육 내용을 확인하고, 이름을 입력한 뒤 서명해 주세요.</p>
+<p class="notice">아래 교육 내용을 확인하고, 소속과 이름을 입력한 뒤 서명해 주세요.</p>
 
 <section class="card-block">
   <h2>{{ document.title }}</h2>
   <pre class="document-box">{{ document.content }}</pre>
 
+  <label>소속 지사
+    <select id="site_id">
+      <option value="">선택해 주세요</option>
+      {% for site in sites %}
+      <option value="{{ site.id }}">{{ site.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+
   <label>이름
-    <input type="text" id="name" value="{{ suggested_name }}" placeholder="이름을 입력해 주세요">
+    <input type="text" id="name" placeholder="이름을 입력해 주세요">
   </label>
 
   <label class="agree-label">
@@ -28,8 +37,6 @@
 </section>
 
 <script>
-const token = {{ token | tojson }};
-
 // 서명 패드: 외부 라이브러리 없이 canvas로 직접 구현
 const canvas = document.getElementById("signature-pad");
 const ctx = canvas.getContext("2d");
@@ -85,7 +92,12 @@ document.getElementById("submit-btn").addEventListener("click", async () => {
   const submitError = document.getElementById("submit-error");
   submitError.textContent = "";
 
+  const siteId = document.getElementById("site_id").value;
   const name = document.getElementById("name").value.trim();
+  if (!siteId) {
+    submitError.textContent = "소속 지사를 선택해 주세요.";
+    return;
+  }
   if (!name) {
     submitError.textContent = "이름을 입력해 주세요.";
     return;
@@ -100,8 +112,8 @@ document.getElementById("submit-btn").addEventListener("click", async () => {
   }
 
   const signature_image = canvas.toDataURL("image/png");
-  const body = new URLSearchParams({ name, agree: "on", signature_image });
-  const res = await fetch(`/sign/${token}/submit`, { method: "POST", body });
+  const body = new URLSearchParams({ name, site_id: siteId, agree: "on", signature_image });
+  const res = await fetch(`/sign/submit`, { method: "POST", body });
   const data = await res.json();
   if (!res.ok) {
     submitError.textContent = data.detail || "제출에 실패했습니다.";

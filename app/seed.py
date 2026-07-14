@@ -1,14 +1,8 @@
-import random
-import string
-
 from app import models
 from app.database import Base, SessionLocal, engine
 
 SITE_NAMES = [f"제니엘 {i}지사" for i in range(1, 14)]  # 13개소 (CJ대한통운 파일럿 가정)
-TOTAL_DRIVERS = 356
-
-SAMPLE_SURNAMES = ["김", "이", "박", "최", "정", "강", "조", "윤", "장", "임"]
-SAMPLE_GIVEN = ["민준", "서준", "도윤", "예준", "시우", "지호", "주원", "현우", "지훈", "성민"]
+TOTAL_HEADCOUNT = 356
 
 DOCUMENT_CONTENT = """
 [배송 안전 및 서비스 품질 교육 확인서]
@@ -38,55 +32,18 @@ def run():
             content=DOCUMENT_CONTENT,
         )
         db.add(document)
-        db.flush()
 
-        sites = []
-        for name in SITE_NAMES:
-            site = models.Site(name=name, region=name)
-            db.add(site)
-            sites.append(site)
-        db.flush()
-
-        base_per_site = TOTAL_DRIVERS // len(sites)
-        remainder = TOTAL_DRIVERS % len(sites)
-
-        rng = random.Random(42)
-        driver_seq = 1
-        for idx, site in enumerate(sites):
-            count = base_per_site + (1 if idx < remainder else 0)
-            for _ in range(count):
-                name = rng.choice(SAMPLE_SURNAMES) + rng.choice(SAMPLE_GIVEN)
-                employee_no = f"EMP{driver_seq:04d}"
-                birthdate = "{:04d}{:02d}{:02d}".format(
-                    rng.randint(1975, 2000), rng.randint(1, 12), rng.randint(1, 28)
-                )
-                phone = "010" + "".join(rng.choice(string.digits) for _ in range(8))
-
-                driver = models.Driver(
-                    site_id=site.id,
-                    name=name,
-                    employee_no=employee_no,
-                    phone=phone,
-                    birthdate=birthdate,
-                )
-                db.add(driver)
-                db.flush()
-
-                link = models.SigningLink(driver_id=driver.id, document_id=document.id)
-                db.add(link)
-
-                driver_seq += 1
+        base_per_site = TOTAL_HEADCOUNT // len(SITE_NAMES)
+        remainder = TOTAL_HEADCOUNT % len(SITE_NAMES)
+        for idx, name in enumerate(SITE_NAMES):
+            headcount = base_per_site + (1 if idx < remainder else 0)
+            db.add(models.Site(name=name, headcount=headcount))
 
         db.commit()
-        print(f"시드 완료: 지사 {len(sites)}개, 배송원 {driver_seq - 1}명")
-
-        sample_links = db.query(models.SigningLink).limit(3).all()
-        print("\n샘플 서명 링크 (테스트용, 본인확인 정보 포함):")
-        for link in sample_links:
-            print(
-                f"  http://localhost:8000/sign/{link.token}"
-                f"  ({link.driver.name}, 사번 {link.driver.employee_no}, 생년월일 {link.driver.birthdate})"
-            )
+        print(f"시드 완료: 지사 {len(SITE_NAMES)}개, 예상 인원 합계 {TOTAL_HEADCOUNT}명")
+        print("\n서명 QR/링크(공용, 전 지사 동일):")
+        print("  http://localhost:8000/sign")
+        print("  http://localhost:8000/qr  (QR 코드 인쇄용 페이지)")
     finally:
         db.close()
 

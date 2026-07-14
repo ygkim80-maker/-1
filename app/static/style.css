@@ -135,7 +135,8 @@ button:disabled { opacity: 0.6; cursor: default; }
   font-size: 0.9rem;
 }
 
-.card-block input[type="text"] {
+.card-block input[type="text"],
+.card-block select {
   display: block;
   width: 100%;
   padding: 10px;
@@ -143,6 +144,7 @@ button:disabled { opacity: 0.6; cursor: default; }
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 1rem;
+  background: white;
 }
 
 .document-box {
@@ -211,6 +213,30 @@ button:disabled { opacity: 0.6; cursor: default; }
   font-size: 0.8rem;
   color: var(--muted);
   margin-top: 16px;
+}
+
+.qr-page {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 32px;
+  text-align: center;
+  margin-top: 20px;
+}
+
+.qr-page img {
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+  background: white;
+}
+
+.qr-url {
+  margin-top: 12px;
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: var(--muted);
+  word-break: break-all;
 }
 
 @media print {

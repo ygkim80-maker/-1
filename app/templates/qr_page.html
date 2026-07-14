@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}서명 QR 코드{% endblock %}
+{% block content %}
+<h1>서명 QR 코드</h1>
+<p class="notice">
+  이 QR 코드 하나만 인쇄해서 전 지사에 게시하면 됩니다. 배송원이 스마트폰으로 스캔하면
+  "{{ document_title }}" 페이지로 바로 접속해, 소속과 이름을 입력하고 서명할 수 있습니다.
+</p>
+<button onclick="window.print()">인쇄</button>
+
+<div class="qr-page">
+  <img src="/qr.png" alt="서명 QR 코드">
+  <p class="qr-url">{{ sign_url }}</p>
+</div>
+{% endblock %}
