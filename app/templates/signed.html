@@ -1,7 +1,0 @@
-{% extends "base.html" %}
-{% block title %}서명 완료{% endblock %}
-{% block content %}
-<h1>이미 서명이 완료되었습니다</h1>
-<p>{{ link.signature.entered_name or link.driver.name }}님은 {{ link.signature.signed_at.strftime('%Y-%m-%d %H:%M') }} (UTC)에 서명을 완료했습니다.</p>
-<a href="/certificate/{{ link.id }}">증빙서 보기</a>
-{% endblock %}
