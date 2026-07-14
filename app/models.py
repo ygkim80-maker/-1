@@ -62,6 +62,7 @@ class Signature(Base):
 
     id = Column(Integer, primary_key=True)
     signing_link_id = Column(Integer, ForeignKey("signing_links.id"), nullable=False, unique=True)
+    entered_name = Column(String(50))  # 서명자가 직접 입력한 이름 (본인확인 절차 없음)
     signed_at = Column(DateTime, default=datetime.utcnow)
     ip_address = Column(String(64))
     user_agent = Column(String(255))

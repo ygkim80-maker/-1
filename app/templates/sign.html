@@ -2,28 +2,19 @@
 {% block title %}전자서명 - {{ document.title }}{% endblock %}
 {% block content %}
 <h1>배송 안전교육 서명</h1>
-<p class="notice">본인 확인 후 교육 내용을 확인하고 서명해 주세요.</p>
+<p class="notice">아래 교육 내용을 확인하고, 이름을 입력한 뒤 서명해 주세요.</p>
 
-<section id="verify-section" class="card-block">
-  <h2>1. 본인 확인</h2>
-  <label>사번
-    <input type="text" id="employee_no" placeholder="예: EMP0001">
-  </label>
-  <label>생년월일 (YYYYMMDD)
-    <input type="text" id="birthdate" placeholder="예: 19900101" maxlength="8">
-  </label>
-  <button id="verify-btn" type="button">확인</button>
-  <p id="verify-error" class="error"></p>
-</section>
+<section class="card-block">
+  <h2>{{ document.title }}</h2>
+  <pre class="document-box">{{ document.content }}</pre>
 
-<section id="sign-section" class="card-block" style="display:none;">
-  <h2 id="driver-greeting"></h2>
-  <h3 id="document-title"></h3>
-  <pre id="document-content" class="document-box"></pre>
+  <label>이름
+    <input type="text" id="name" value="{{ suggested_name }}" placeholder="이름을 입력해 주세요">
+  </label>
 
   <label class="agree-label">
     <input type="checkbox" id="agree">
-    위 교육 내용을 확인하였으며 동의합니다.
+    위 교육 내용을 확인하였으며, 교육을 완료했습니다.
   </label>
 
   <h3>서명</h3>
@@ -38,33 +29,6 @@
 
 <script>
 const token = {{ token | tojson }};
-const verifyBtn = document.getElementById("verify-btn");
-const verifySection = document.getElementById("verify-section");
-const signSection = document.getElementById("sign-section");
-const verifyError = document.getElementById("verify-error");
-
-verifyBtn.addEventListener("click", async () => {
-  verifyError.textContent = "";
-  const employee_no = document.getElementById("employee_no").value.trim();
-  const birthdate = document.getElementById("birthdate").value.trim();
-  if (!employee_no || !birthdate) {
-    verifyError.textContent = "사번과 생년월일을 입력해 주세요.";
-    return;
-  }
-  const body = new URLSearchParams({ employee_no, birthdate });
-  const res = await fetch(`/sign/${token}/verify`, { method: "POST", body });
-  const data = await res.json();
-  if (!res.ok || !data.ok) {
-    verifyError.textContent = data.message || "확인에 실패했습니다.";
-    return;
-  }
-  document.getElementById("driver-greeting").textContent = `${data.driver_name}님, 안녕하세요.`;
-  document.getElementById("document-title").textContent = data.document_title;
-  document.getElementById("document-content").textContent = data.document_content;
-  verifySection.style.display = "none";
-  signSection.style.display = "block";
-  window._verified = { employee_no, birthdate };
-});
 
 // 서명 패드: 외부 라이브러리 없이 canvas로 직접 구현
 const canvas = document.getElementById("signature-pad");
@@ -120,6 +84,12 @@ document.getElementById("clear-btn").addEventListener("click", () => {
 document.getElementById("submit-btn").addEventListener("click", async () => {
   const submitError = document.getElementById("submit-error");
   submitError.textContent = "";
+
+  const name = document.getElementById("name").value.trim();
+  if (!name) {
+    submitError.textContent = "이름을 입력해 주세요.";
+    return;
+  }
   if (!document.getElementById("agree").checked) {
     submitError.textContent = "동의 체크박스를 선택해 주세요.";
     return;
@@ -128,13 +98,9 @@ document.getElementById("submit-btn").addEventListener("click", async () => {
     submitError.textContent = "서명을 입력해 주세요.";
     return;
   }
+
   const signature_image = canvas.toDataURL("image/png");
-  const body = new URLSearchParams({
-    employee_no: window._verified.employee_no,
-    birthdate: window._verified.birthdate,
-    agree: "on",
-    signature_image,
-  });
+  const body = new URLSearchParams({ name, agree: "on", signature_image });
   const res = await fetch(`/sign/${token}/submit`, { method: "POST", body });
   const data = await res.json();
   if (!res.ok) {

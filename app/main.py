@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
@@ -120,45 +120,21 @@ def sign_page(token: str, request: Request, db: Session = Depends(get_db)):
     if link.signature:
         return templates.TemplateResponse("signed.html", {"request": request, "link": link})
     return templates.TemplateResponse(
-        "sign.html", {"request": request, "token": token, "document": link.document}
+        "sign.html",
+        {
+            "request": request,
+            "token": token,
+            "document": link.document,
+            "suggested_name": link.driver.name,
+        },
     )
-
-
-def _verify_identity(link: models.SigningLink, employee_no: str, birthdate: str) -> bool:
-    driver = link.driver
-    return driver.employee_no == employee_no.strip() and driver.birthdate == birthdate.strip()
-
-
-@app.post("/sign/{token}/verify")
-def verify_identity(
-    token: str,
-    employee_no: str = Form(...),
-    birthdate: str = Form(...),
-    db: Session = Depends(get_db),
-):
-    link = db.query(models.SigningLink).filter(models.SigningLink.token == token).first()
-    if not link:
-        raise HTTPException(status_code=404, detail="유효하지 않은 링크입니다")
-    if link.signature:
-        return JSONResponse({"ok": False, "message": "이미 서명이 완료되었습니다."}, status_code=409)
-    if not _verify_identity(link, employee_no, birthdate):
-        return JSONResponse(
-            {"ok": False, "message": "사번 또는 생년월일이 일치하지 않습니다."}, status_code=401
-        )
-    return {
-        "ok": True,
-        "driver_name": link.driver.name,
-        "document_title": link.document.title,
-        "document_content": link.document.content,
-    }
 
 
 @app.post("/sign/{token}/submit")
 def submit_signature(
     token: str,
     request: Request,
-    employee_no: str = Form(...),
-    birthdate: str = Form(...),
+    name: str = Form(...),
     agree: str = Form(...),
     signature_image: str = Form(...),
     db: Session = Depends(get_db),
@@ -168,8 +144,9 @@ def submit_signature(
         raise HTTPException(status_code=404, detail="유효하지 않은 링크입니다")
     if link.signature:
         raise HTTPException(status_code=409, detail="이미 서명이 완료되었습니다")
-    if not _verify_identity(link, employee_no, birthdate):
-        raise HTTPException(status_code=401, detail="사번 또는 생년월일이 일치하지 않습니다")
+    name = name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="이름을 입력해 주세요")
     if agree not in ("on", "true", "1"):
         raise HTTPException(status_code=400, detail="교육 내용 동의가 필요합니다")
 
@@ -190,16 +167,17 @@ def submit_signature(
     content_hash = sha256_hex(
         link.document.content.encode("utf-8"),
         image_bytes,
-        link.driver.employee_no.encode("utf-8"),
+        name.encode("utf-8"),
         signed_at.isoformat().encode("utf-8"),
     )
 
     signature = models.Signature(
         signing_link_id=link.id,
+        entered_name=name,
         signed_at=signed_at,
         ip_address=request.client.host if request.client else "unknown",
         user_agent=request.headers.get("user-agent", "")[:255],
-        verify_method="employee_no+birthdate",
+        verify_method="self_reported_name",
         signature_image_path=f"/static/signatures/{link.id}.png",
         content_hash=content_hash,
     )
