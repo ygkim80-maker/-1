@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+data/
+app/static/signatures/
+.venv/
+venv/

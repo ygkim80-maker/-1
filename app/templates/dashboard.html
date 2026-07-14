@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}본사 대시보드 - 배송 서명 플랫폼{% endblock %}
+{% block content %}
+<h1>배송원 교육 서명 현황</h1>
+<p class="notice">CJ대한통운 13개소 배송원 교육 이수 서명 진척률을 실시간으로 확인합니다.</p>
+
+<section class="summary-cards">
+  <div class="card">
+    <div class="card-label">전체 배송원</div>
+    <div class="card-value">{{ total_drivers }}명</div>
+  </div>
+  <div class="card">
+    <div class="card-label">서명 완료</div>
+    <div class="card-value">{{ total_signed }}명</div>
+  </div>
+  <div class="card">
+    <div class="card-label">전체 진척률</div>
+    <div class="card-value">{{ overall_rate }}%</div>
+  </div>
+</section>
+
+<div class="progress-bar overall">
+  <div class="progress-fill" style="width: {{ overall_rate }}%;"></div>
+</div>
+
+<h2>지사별 현황</h2>
+{% for row in site_rows %}
+<details class="site-block">
+  <summary>
+    <span class="site-name">{{ row.site.name }}</span>
+    <span class="site-stat">{{ row.signed }} / {{ row.total }} ({{ row.rate }}%)</span>
+  </summary>
+  <div class="progress-bar">
+    <div class="progress-fill" style="width: {{ row.rate }}%;"></div>
+  </div>
+  <table class="driver-table">
+    <thead>
+      <tr><th>이름</th><th>사번</th><th>상태</th><th>서명일시(UTC)</th><th>액션</th></tr>
+    </thead>
+    <tbody>
+      {% for dr in row.drivers %}
+      <tr class="{{ 'signed' if dr.signed else 'unsigned' }}">
+        <td>{{ dr.driver.name }}</td>
+        <td>{{ dr.driver.employee_no }}</td>
+        <td>{{ '서명완료' if dr.signed else '미서명' }}</td>
+        <td>{{ dr.signed_at.strftime('%Y-%m-%d %H:%M') if dr.signed_at else '-' }}</td>
+        <td>
+          {% if dr.signed %}
+            <a href="/certificate/{{ dr.link_id }}">증빙서</a>
+          {% else %}
+            <a href="/sign/{{ dr.token }}" target="_blank">서명페이지</a>
+            <button class="remind-btn" data-driver-id="{{ dr.driver.id }}">리마인드</button>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</details>
+{% endfor %}
+
+<script>
+document.querySelectorAll(".remind-btn").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = "발송중...";
+    try {
+      const res = await fetch(`/api/remind/${btn.dataset.driverId}`, { method: "POST" });
+      if (!res.ok) throw new Error("failed");
+      btn.textContent = "발송완료(stub)";
+    } catch (e) {
+      btn.textContent = "실패";
+      btn.disabled = false;
+    }
+  });
+});
+</script>
+{% endblock %}

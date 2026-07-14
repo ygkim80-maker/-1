@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}전자서명 증빙서{% endblock %}
+{% block content %}
+<div class="certificate">
+  <h1>전자서명 증빙서</h1>
+  <table class="cert-table">
+    <tr><th>문서명</th><td>{{ link.document.title }} (v{{ link.document.version }})</td></tr>
+    <tr><th>서명자</th><td>{{ link.driver.name }} ({{ link.driver.employee_no }})</td></tr>
+    <tr><th>소속</th><td>{{ link.driver.site.name }}</td></tr>
+    <tr><th>서명 시각</th><td>{{ signature.signed_at.strftime('%Y-%m-%d %H:%M:%S') }} (UTC)</td></tr>
+    <tr><th>본인확인 방식</th><td>{{ signature.verify_method }}</td></tr>
+    <tr><th>IP 주소</th><td>{{ signature.ip_address }}</td></tr>
+    <tr><th>문서/서명 해시(SHA-256)</th><td class="hash">{{ signature.content_hash }}</td></tr>
+  </table>
+  <div class="signature-image">
+    <img src="{{ signature.signature_image_path }}" alt="서명 이미지">
+  </div>
+  <p class="cert-notice">
+    본 증빙서는 서명 시점의 문서 내용과 서명 이미지, 서명 시각, IP를 해시로 묶어 저장한 기록에 기반합니다.
+    법적 효력이 필요한 대외 제출용 문서라면 모두싸인/카카오전자서명 등 검증된 전자서명 서비스 연동을 권장합니다.
+  </p>
+  <button onclick="window.print()">인쇄 / PDF 저장</button>
+</div>
+{% endblock %}
