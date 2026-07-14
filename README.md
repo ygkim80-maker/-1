@@ -41,6 +41,22 @@ uvicorn app.main:app --reload
 - 대시보드: http://localhost:8000/dashboard
 - 서명 페이지: `python -m app.seed` 실행 시 콘솔에 출력되는 샘플 링크 사용, 또는 대시보드의 "서명페이지" 링크 클릭
 
+## 배포 (Render, 무료 플랜)
+
+1. https://render.com 에서 GitHub 계정으로 가입/로그인 후, `ygkim80-maker` 계정의 GitHub 저장소 접근을 허용합니다.
+2. Render 대시보드 → **New** → **Web Service** → 이 저장소(`ygkim80-maker/-1`)를 선택합니다.
+3. 브랜치를 `claude/delivery-signature-flow-immdgv` 로 지정합니다.
+4. 아래 값을 그대로 입력합니다.
+   - **Runtime**: Python 3
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   - **Instance Type**: Free
+5. **Create Web Service** 클릭 후 2~3분 기다리면 `https://[서비스명].onrender.com` 형태의 URL이 발급됩니다. `/dashboard`, `/sign/{token}` 경로로 바로 접속 가능합니다.
+
+⚠️ 무료 플랜은 SQLite 파일이 **재배포 시 초기화**됩니다(시드 데이터로 리셋). 서명 기록을 계속 보존하려면
+Postgres 애드온이나 유료 플랜의 영구 디스크(Persistent Disk) 연결이 필요합니다. 리포지토리에 포함된
+`render.yaml`을 사용하면 Blueprint 배포로 같은 설정을 한 번에 적용할 수도 있습니다.
+
 ## 데이터 모델
 
 `Site`(지사) → `Driver`(배송원) → `SigningLink`(문서별 서명 링크) → `Signature`(서명 기록)

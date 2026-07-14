@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: zeniel-delivery-signature
+    runtime: python
+    plan: free
+    branch: claude/delivery-signature-flow-immdgv
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
